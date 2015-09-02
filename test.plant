@@ -1,0 +1,7 @@
+@startuml
+A -> B : [[42]] Hello
+B -> C : [[42]] Jonathan
+C -> D : [[42]] Thanks
+D -> E : [[42]] Helping
+E -> F : [[42]] Me
+@enduml
