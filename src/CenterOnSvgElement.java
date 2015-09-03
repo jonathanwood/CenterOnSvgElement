@@ -1,6 +1,7 @@
 import org.apache.batik.anim.dom.SAXSVGDocumentFactory;
 import org.apache.batik.bridge.BridgeContext;
 import org.apache.batik.bridge.UserAgent;
+import org.apache.batik.bridge.ViewBox;
 import org.apache.batik.gvt.GraphicsNode;
 import org.apache.batik.swing.JSVGCanvas;
 import org.apache.batik.swing.gvt.GVTTreeRendererEvent;
@@ -11,22 +12,24 @@ import org.apache.batik.util.XMLResourceDescriptor;
 import org.w3c.dom.Attr;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
-import org.w3c.dom.svg.SVGAElement;
-import org.w3c.dom.svg.SVGDocument;
+import org.w3c.dom.svg.*;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
 
 public class CenterOnSvgElement extends JPanel {
 
-    private Element textElement;
+    private float[] viewBoxAttrs;
     private CustomSvgCanvas customSvgCanvas;
     private SAXSVGDocumentFactory svgDocumentFactory =
             new SAXSVGDocumentFactory( XMLResourceDescriptor.getXMLParserClassName() );
     private SVGDocument svgDocument ;
     private final static String XLINK_NS = "http://www.w3.org/1999/xlink";
+    private Map<String, Element> textElements = new HashMap<>();
 
 
 
@@ -89,30 +92,36 @@ public class CenterOnSvgElement extends JPanel {
          */
         @Override
         public void linkActivated(LinkActivationEvent linkActivationEvent) {
-            // TODO : I have no idea how to center on textElement
+            Element textElement = textElements.get(linkActivationEvent.getReferencedURI());
+            // reset any user panning
+            customSvgCanvas.setRenderingTransform( customSvgCanvas.getInitialTransform(), true);
 
-            GraphicsNode graphicsNode = customSvgCanvas.getBridgeContxt().getGraphicsNode(textElement);
-            AffineTransform gnt = new AffineTransform(customSvgCanvas.getRenderingTransform());
-            gnt.concatenate(graphicsNode.getGlobalTransform());
+            SVGLocatable textLoc = (SVGLocatable) textElement;
 
-            Shape rect = gnt.createTransformedShape(graphicsNode.getPrimitiveBounds());
-            Rectangle bounds = rect.getBounds();
+            SVGRect bounds = textLoc.getBBox();
 
-            double dx = -bounds.getX() - bounds.getWidth() / 2;
-            double dy = -bounds.getY() - bounds.getHeight() / 2;
+            float dx = bounds.getX() + bounds.getWidth() / 2;
+            float dy = bounds.getY() + bounds.getHeight() / 2;
 
-            AffineTransform tx = AffineTransform.getTranslateInstance(dx, dy);
 
-            Dimension canvasSize = customSvgCanvas.getSize();
+            final SVGSVGElement rootElement = svgDocument.getRootElement();
 
-            tx.preConcatenate(AffineTransform.getTranslateInstance
-                    (canvasSize.width/2, canvasSize.height/2));
 
-            AffineTransform rt = (AffineTransform) customSvgCanvas.getRenderingTransform().clone();
+            float cx = viewBoxAttrs[0] + viewBoxAttrs[2] / 2;
+            float cy = viewBoxAttrs[1] + viewBoxAttrs[3] / 2;
 
-            rt.preConcatenate(tx);
+            final float tx = dx - cx;
+            final float ty = dy - cy;
 
-            customSvgCanvas.setRenderingTransform(rt);
+            customSvgCanvas.getUpdateManager().getUpdateRunnableQueue().invokeLater(
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            rootElement.setAttributeNS(null, "viewBox", tx + " " + ty + " " + viewBoxAttrs[2] + " " + viewBoxAttrs[2]  );
+                        }
+                    }
+
+            );
 
         }
     }
@@ -144,14 +153,23 @@ public class CenterOnSvgElement extends JPanel {
         for(int i = 0; i < anchors.getLength(); i++) {
             Element anchor = (Element) anchors.item(i);
             Attr href = anchor.getAttributeNodeNS(XLINK_NS, "href");
-            Integer lineNumber = Integer.valueOf(href.getValue());
+            String lineNumber = href.getValue();
             NodeList textNodes = anchor.getElementsByTagName("text");
-            // this is an anchor withot a text lement under it
+            // this is an anchor without a text element under it
             if (textNodes.getLength() != 1) continue;
-            textElement = (Element) textNodes.item(0);
-            break;
+            textElements.put(lineNumber, (Element) textNodes.item(0));
+
         }
         customSvgCanvas.setDocument( svgDocument );
+        final SVGSVGElement rootElement = svgDocument.getRootElement();
+
+        String viewBox = rootElement.getAttributeNS(null, "viewBox");
+
+        // get the initial view box for later use
+        viewBoxAttrs =
+                ViewBox.parseViewBoxAttribute(rootElement, viewBox, customSvgCanvas.getBridgeContxt());
+
+
     }
 
     public static void main(String[] args) {
