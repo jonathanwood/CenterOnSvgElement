@@ -92,35 +92,62 @@ public class CenterOnSvgElement extends JPanel {
          */
         @Override
         public void linkActivated(LinkActivationEvent linkActivationEvent) {
-            Element textElement = textElements.get(linkActivationEvent.getReferencedURI());
-            // reset any user panning
-            customSvgCanvas.setRenderingTransform( customSvgCanvas.getInitialTransform(), true);
-
-            SVGLocatable textLoc = (SVGLocatable) textElement;
-
-            SVGRect bounds = textLoc.getBBox();
-
-            float dx = bounds.getX() + bounds.getWidth() / 2;
-            float dy = bounds.getY() + bounds.getHeight() / 2;
-
 
             final SVGSVGElement rootElement = svgDocument.getRootElement();
+            Element textElement = textElements.get(linkActivationEvent.getReferencedURI());
+            SVGRect textBBox = ((SVGLocatable)textElement).getBBox();
+            SVGPoint textCenter = rootElement.createSVGPoint();
+            textCenter.setX(textBBox.getX() + textBBox.getWidth()/2);
+            textCenter.setY(textBBox.getY() + textBBox.getHeight() / 2);
+            final SVGMatrix rootTransform = ((SVGLocatable) textElement).getTransformToElement(rootElement);
+            final SVGMatrix canvasTransform = ((SVGLocatable) textElement).getCTM().inverse();
+            final SVGPoint textCenterOnRoot = textCenter.matrixTransform(rootTransform);
+            final SVGPoint textCenterOnCanvas = textCenter.matrixTransform(canvasTransform);
 
+            final Element textCircle = svgDocument.createElementNS("http://www.w3.org/2000/svg", "circle");
+            textCircle.setAttributeNS(null,"id", "textSpot");
+            textCircle.setAttributeNS(null,"cx", "" + textCenter.getX());
+            textCircle.setAttributeNS(null,"cy", "" + textCenter.getY());
+            textCircle.setAttributeNS(null,"r", "4");
+            textCircle.setAttributeNS(null,"fill", "green");
 
-            float cx = viewBoxAttrs[0] + viewBoxAttrs[2] / 2;
-            float cy = viewBoxAttrs[1] + viewBoxAttrs[3] / 2;
+            final Element rootCircle = svgDocument.createElementNS("http://www.w3.org/2000/svg", "circle");
+            rootCircle.setAttributeNS(null,"id", "rootSpot");
+            rootCircle.setAttributeNS(null,"cx", "" + textCenterOnRoot.getX());
+            rootCircle.setAttributeNS(null,"cy", "" + textCenterOnRoot.getY());
+            rootCircle.setAttributeNS(null,"r", "2");
+            rootCircle.setAttributeNS(null,"fill", "red");
 
-            final float tx = dx - cx;
-            final float ty = dy - cy;
+            final Element canvasCircle = svgDocument.createElementNS("http://www.w3.org/2000/svg", "circle");
+            canvasCircle.setAttributeNS(null,"id", "canvasSpot");
+            canvasCircle.setAttributeNS(null,"cx", "" + textCenterOnCanvas.getX());
+            canvasCircle.setAttributeNS(null,"cy", "" + textCenterOnCanvas.getY());
+            canvasCircle.setAttributeNS(null,"r", "4");
+            canvasCircle.setAttributeNS(null,"stroke", "blue");
+            canvasCircle.setAttributeNS(null,"stroke-width", "2");
+            canvasCircle.setAttributeNS(null,"fill-opacity", "0.0");
 
             customSvgCanvas.getUpdateManager().getUpdateRunnableQueue().invokeLater(
                     new Runnable() {
                         @Override
                         public void run() {
-                            rootElement.setAttributeNS(null, "viewBox", tx + " " + ty + " " + viewBoxAttrs[2] + " " + viewBoxAttrs[2]  );
+                            Element rem = svgDocument.getElementById("textSpot");
+                            if(rem != null) {
+                                rootElement.removeChild(rem);
+                            }
+                            rem = svgDocument.getElementById("rootSpot");
+                            if(rem != null) {
+                                rootElement.removeChild(rem);
+                            }
+                            rem = svgDocument.getElementById("canvasSpot");
+                            if(rem != null) {
+                                rootElement.removeChild(rem);
+                            }
+                            rootElement.appendChild(textCircle);
+                            rootElement.appendChild(rootCircle);
+                            rootElement.appendChild(canvasCircle);
                         }
                     }
-
             );
 
         }
