@@ -11,17 +11,24 @@ import org.apache.batik.swing.svg.LinkActivationListener;
 import org.apache.batik.util.XMLResourceDescriptor;
 import org.w3c.dom.Attr;
 import org.w3c.dom.Element;
+import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.NodeList;
 import org.w3c.dom.svg.*;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.ComponentEvent;
+import java.awt.event.ComponentListener;
 import java.awt.geom.AffineTransform;
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-public class CenterOnSvgElement extends JPanel {
+public class CenterOnSvgElement extends JPanel implements ComponentListener {
+
+    private static final Logger LOGGER = Logger.getLogger(CenterOnSvgElement.class.getName());
 
     private float[] viewBoxAttrs;
     private CustomSvgCanvas customSvgCanvas;
@@ -31,6 +38,26 @@ public class CenterOnSvgElement extends JPanel {
     private final static String XLINK_NS = "http://www.w3.org/1999/xlink";
     private Map<String, Element> textElements = new HashMap<>();
 
+    @Override
+    public void componentResized(ComponentEvent e) {
+        Dimension d = e.getComponent().getSize();
+        LOGGER.log(Level.INFO,"Resized to {0}x{1}.", new Object[]{d.getWidth(),d.getHeight()});
+    }
+
+    @Override
+    public void componentMoved(ComponentEvent e) {
+
+    }
+
+    @Override
+    public void componentShown(ComponentEvent e) {
+
+    }
+
+    @Override
+    public void componentHidden(ComponentEvent e) {
+
+    }
 
 
     /*
@@ -54,6 +81,7 @@ public class CenterOnSvgElement extends JPanel {
         public BridgeContext getBridgeContxt() {
             return bridgeContext;
         }
+
     }
 
     // rhis calss is just to set the frame visibile to the prefered size after finished rendering
@@ -84,6 +112,8 @@ public class CenterOnSvgElement extends JPanel {
     }
 
 
+
+
     private class CenterOnLinkListener implements LinkActivationListener {
 
         /*
@@ -108,11 +138,28 @@ public class CenterOnSvgElement extends JPanel {
             float vbY = - (Float.parseFloat(vbParts[3])/2 - textCenterOnRoot.getY());
             final String newViewBox = "" + vbX + " " + vbY + " " + vbParts[2] + " " + vbParts[3];
 
+            final Element vbRect = svgDocument.createElementNS("http://www.w3.org/2000/svg", "rect");
+            vbRect.setAttributeNS(null, "id", "vbRect");
+            vbRect.setAttributeNS(null, "x", "" + vbX);
+            vbRect.setAttributeNS(null, "y", "" + vbY);
+            vbRect.setAttributeNS(null, "width", vbParts[2]);
+            vbRect.setAttributeNS(null, "height", vbParts[3]);
+            vbRect.setAttributeNS(null, "fill-opacity", "0.2");
+//            vbRect.setAttributeNS(null, "fill", "blue");
+            vbRect.setAttributeNS(null, "stroke-width", "2");
+            vbRect.setAttributeNS(null, "stroke", "green");
+            vbRect.setAttributeNS(null, "pointer-events", "none");
+
             customSvgCanvas.getUpdateManager().getUpdateRunnableQueue().invokeLater(
                     new Runnable() {
                         @Override
                         public void run() {
+                            Element vbr = svgDocument.getElementById("vbRect");
+                            if(vbr != null) {
+                                rootElement.removeChild(vbr);
+                            }
                             rootElement.setAttributeNS(null, "viewBox", newViewBox);
+                            rootElement.appendChild(vbRect);
                         }
                     }
             );
@@ -127,10 +174,13 @@ public class CenterOnSvgElement extends JPanel {
         customSvgCanvas = new CustomSvgCanvas();
         customSvgCanvas.setDoubleBuffered(true);
         customSvgCanvas.setDocumentState(JSVGCanvas.ALWAYS_DYNAMIC);
-        customSvgCanvas.addGVTTreeRendererListener( new RefreshSizeRenderListener() );
-        customSvgCanvas.addLinkActivationListener(new CenterOnLinkListener() );
+        customSvgCanvas.addGVTTreeRendererListener(new RefreshSizeRenderListener());
+        customSvgCanvas.addLinkActivationListener(new CenterOnLinkListener());
 
+        this.setLayout(new BorderLayout());
         add(customSvgCanvas, BorderLayout.CENTER);
+
+        this.addComponentListener(this);
 
     }
 
